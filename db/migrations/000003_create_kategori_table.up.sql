@@ -1,4 +1,0 @@
-CREATE TABLE kategori (
-  id_kategori INT PRIMARY KEY AUTO_INCREMENT,
-  nama_kategori VARCHAR(100) NOT NULL UNIQUE
-);
