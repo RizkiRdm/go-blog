@@ -22,7 +22,7 @@ func Connection() (db *sql.DB) {
 	dbUser := os.Getenv("DB_USER")
 	dbName := os.Getenv("DB_NAME")
 
-	db, err := sql.Open(dbDriver, dbUser+":"+"@/"+dbName)
+	db, err := sql.Open(dbDriver, dbUser+":"+"@/"+dbName+"?"+"parseTime=true")
 
 	if err != nil {
 		panic(err)
