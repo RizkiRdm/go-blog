@@ -103,80 +103,72 @@ func GetDetailBlog(c *fiber.Ctx) error {
 	})
 }
 
-// TODO: refactor function
-// create new blog - POST
-func CreateBlog(c *fiber.Ctx) error {
-	blog := new(blog.RequestCreateBlog)
-	if err := c.BodyParser(blog); err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"message": err.Error(),
-		})
-	}
+// NEW CODE
 
-	db := db.Connection()
-	defer db.Close()
-
-	q := "INSERT INTO `blogs` (`user_id`, `category_id`, `tag_id`, `title`, `thumbnail`, `body`) VALUES (?, ?, ?, ?, ?, ?)"
-
+// small function
+// add new blog
+func addBlog(db *sql.DB, userId int, thumbnail, title, body string) (int64, error) {
+	q := "INSERT INTO blogs (user_id, title, thumbnail, body) VALUES (?, ?, ?, ?)"
 	stmt, err := db.Prepare(q)
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": "internal server error",
-		})
+		return 0, err
 	}
 	defer stmt.Close()
 
-	for _, tag := range blog.TagId {
-		_, err := stmt.Exec(blog.UserId, blog.CategoryId, tag, blog.Title, blog.Thumbnail, blog.Body)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"message": err.Error(),
-			})
-		}
+	res, err := stmt.Exec(userId, thumbnail, title, body)
+	if err != nil {
+		return 0, err
 	}
-
-	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"message": "success",
-		"data":    blog,
-	})
+	return res.LastInsertId()
 }
 
-// TODO: refactor function
-func UpdateBlog(c *fiber.Ctx) error {
-	id := c.Params("id")
-	userId := c.Params("userId")
-	blog := new(blog.RequestUpdateBlog)
-	if err := c.BodyParser(blog); err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"message": err.Error(),
-		})
-	}
-
-	db := db.Connection()
-	defer db.Close()
-
-	q := "UPDATE `blogs` SET `category_id` = ?,`tag_id` = ?,`title` = ?,`thumbnail` = ?,`body` = ?,`updated_at`= CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?"
-
+// add tag blog
+func addTag(db *sql.DB, name string) (int64, error) {
+	q := "INSERT INTO tags (name) VALUES (?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)"
 	stmt, err := db.Prepare(q)
-
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": "internal server errors",
-		})
+		return 0, err
 	}
 	defer stmt.Close()
 
-	// iterate for update tag
-	for _, tag := range blog.TagId {
-		_, err := stmt.Exec(blog.CategoryId, tag, blog.Title, blog.Thumbnail, blog.Body, id, userId)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"message": err.Error(),
-			})
-		}
+	res, err := stmt.Exec(name)
+	if err != nil {
+		return 0, err
 	}
-	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"message": "succes update blog",
-		"data":    blog,
-	})
+	return res.LastInsertId()
+}
+
+// add new category blog
+func addCategory(db *sql.DB, title string) (int64, error) {
+	q := "INSERT INTO categories (title) VALUES (?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)"
+	stmt, err := db.Prepare(q)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(title)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// associate blog with tag
+func associateBlogWithTag(db *sql.DB, blogId, tagId int) error {
+	q := "INSERT INTO blog_tags (id_blog, id_tag) VALUES (?, ?) ON DUPLICATE KEY UPDATE id_blog = id_blog"
+	_, err := db.Exec(q, blogId, tagId)
+	return err
+}
+
+// associate blog with tag
+func associateBlogWithCategory(db *sql.DB, blogId, categoryId int) error {
+	q := "INSERT INTO blog_categories (id, id_tag) VALUES (?, ?) ON DUPLICATE KEY UPDATE id = id"
+	_, err := db.Exec(q, blogId, categoryId)
+	return err
+}
+
+// handle insert data blog with tag & category
+func handleBlogWithDetails(c *fiber.Ctx) error {
+
 }
