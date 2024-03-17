@@ -107,7 +107,7 @@ func GetDetailBlog(c *fiber.Ctx) error {
 
 // small function
 // add new blog
-func addBlog(db *sql.DB, userId int, thumbnail, title, body string) (int64, error) {
+func addBlog(db *sql.Tx, userId int, thumbnail, title, body string) (int64, error) {
 	q := "INSERT INTO blogs (user_id, title, thumbnail, body) VALUES (?, ?, ?, ?)"
 	stmt, err := db.Prepare(q)
 	if err != nil {
@@ -123,7 +123,7 @@ func addBlog(db *sql.DB, userId int, thumbnail, title, body string) (int64, erro
 }
 
 // add tag blog
-func addTag(db *sql.DB, name string) (int64, error) {
+func addTag(db *sql.Tx, name string) (int64, error) {
 	q := "INSERT INTO tags (name) VALUES (?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)"
 	stmt, err := db.Prepare(q)
 	if err != nil {
@@ -139,7 +139,7 @@ func addTag(db *sql.DB, name string) (int64, error) {
 }
 
 // add new category blog
-func addCategory(db *sql.DB, title string) (int64, error) {
+func addCategory(db *sql.Tx, title string) (int64, error) {
 	q := "INSERT INTO categories (title) VALUES (?) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)"
 	stmt, err := db.Prepare(q)
 	if err != nil {
@@ -155,20 +155,98 @@ func addCategory(db *sql.DB, title string) (int64, error) {
 }
 
 // associate blog with tag
-func associateBlogWithTag(db *sql.DB, blogId, tagId int) error {
+func associateBlogWithTag(db *sql.Tx, blogId, tagId int) error {
 	q := "INSERT INTO blog_tags (id_blog, id_tag) VALUES (?, ?) ON DUPLICATE KEY UPDATE id_blog = id_blog"
 	_, err := db.Exec(q, blogId, tagId)
 	return err
 }
 
 // associate blog with tag
-func associateBlogWithCategory(db *sql.DB, blogId, categoryId int) error {
+func associateBlogWithCategory(db *sql.Tx, blogId, categoryId int) error {
 	q := "INSERT INTO blog_categories (id, id_tag) VALUES (?, ?) ON DUPLICATE KEY UPDATE id = id"
 	_, err := db.Exec(q, blogId, categoryId)
 	return err
 }
 
 // handle insert data blog with tag & category
-func handleBlogWithDetails(c *fiber.Ctx) error {
+func HandleBlogWithDetails(c *fiber.Ctx) error {
+	var req blog.RequestCreateBlog
+	// handle body parse
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"message": "error parsing request",
+		})
+	}
 
+	// define variable db
+	db := db.Connection()
+	defer db.Close()
+
+	// use transaction for make sure all operation success
+	tx, err := db.Begin()
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": "internal server error",
+		})
+	}
+	defer tx.Rollback()
+
+	// add new blog
+	blogId, err := addBlog(tx, req.UsernameId, req.Thumbnail, req.Title, req.Body)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": "error add new blog",
+		})
+	}
+
+	// add a tag and connect to blog
+	for _, tag := range req.Tags {
+		tagId, err := addTag(tx, tag)
+
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"message": "error adding tag",
+			})
+		}
+
+		// associate tag and blog
+		if err := associateBlogWithTag(tx, int(blogId), int(tagId)); err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"message": "error associating tage with blog",
+			})
+		}
+	}
+
+	// add category and connect to blog
+	categoryId, err := addCategory(tx, req.Category)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": "error add category",
+		})
+	}
+
+	if err := associateBlogWithCategory(tx, int(blogId), int(categoryId)); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": "error associating cateogory to blog",
+		})
+	}
+
+	// commit transaction if success
+	if err := tx.Commit(); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message": "error comitting transaction",
+		})
+	}
+
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"message": "success",
+		"data": fiber.Map{
+			"username":  req.UsernameId,
+			"thumbnail": req.Thumbnail,
+			"title":     req.Title,
+			"body":      req.Body,
+			"category":  req.Category,
+			"tags":      req.Tags,
+		},
+	})
 }
