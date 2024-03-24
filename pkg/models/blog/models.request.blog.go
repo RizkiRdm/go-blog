@@ -1,18 +1,18 @@
 package blog
 
 type RequestCreateBlog struct {
-	UsernameId int      `json:"username"`
+	UsernameId string   `json:"user_id"`
 	Thumbnail  string   `json:"thumbnail"`
-	Title      string   `json:"title_blog"`
-	Body       string   `json:"body_blog"`
-	Category   string   `json:"cateogory"`
-	Tags       []string `json:"tags"`
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	CategoryId string   `json:"category_id"`
+	TagsId     []string `json:"tags_id"`
 }
 
 type RequestUpdateBlog struct {
-	Thumbnail string   `json:"thumbnail"`
-	Title     string   `json:"title_blog"`
-	Body      string   `json:"body_blog"`
-	Category  string   `json:"cateogory"`
-	Tags      []string `json:"tags"`
+	Thumbnail  string   `json:"thumbnail"`
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	CategoryId string   `json:"category_id"`
+	TagsId     []string `json:"tags_id"`
 }
