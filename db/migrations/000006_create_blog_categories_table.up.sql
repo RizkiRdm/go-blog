@@ -4,6 +4,6 @@ CREATE TABLE IF NOT EXISTS `blog_categories` (
     PRIMARY KEY (`id_blog`)
 );
 ALTER TABLE `blog_categories`
-ADD FOREIGN KEY (`id`) REFERENCES `blogs`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ADD FOREIGN KEY (`id_blog`) REFERENCES `blogs`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `blog_categories`
 ADD FOREIGN KEY (`id_category`) REFERENCES `categories`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
