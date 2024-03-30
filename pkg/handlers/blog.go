@@ -3,6 +3,7 @@ package blog
 import (
 	"database/sql"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -160,6 +161,13 @@ func CreateBlog(c *fiber.Ctx) error {
 	result, err := tx.Exec(blogQuery, userId, form.Value["title"][0], thumbnailPath, form.Value["body"][0])
 	if err != nil {
 		tx.Rollback()
+
+		if err := os.Remove(thumbnailPath); err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"message":    "failed to rollback image",
+				"messageErr": err.Error(), // just debugging
+			})
+		}
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message":    "failed insert blog",
 			"messageErr": err.Error(),
