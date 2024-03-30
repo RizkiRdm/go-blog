@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/RizkiRdm/go-blog/db"
 	"github.com/RizkiRdm/go-blog/pkg/models/blog"
@@ -14,14 +13,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 )
-
-func SplitTags(tagString string) []string {
-	if tagString == "" {
-		return nil
-	}
-
-	return strings.Split(tagString, ",")
-}
 
 // read blogs - GET
 func GetBlogs(c *fiber.Ctx) error {
@@ -32,7 +23,6 @@ func GetBlogs(c *fiber.Ctx) error {
 			blogs.id, 
 			users.username, 
 			categories.title AS kategori, 
-			GROUP_CONCAT(tags.name) AS tag, 
 			blogs.thumbnail, 
 			blogs.title, 
 			blogs.body, 
@@ -42,8 +32,6 @@ func GetBlogs(c *fiber.Ctx) error {
 			LEFT JOIN users ON blogs.user_id = users.id 
 			LEFT JOIN blog_categories ON blogs.id = blog_categories.id_blog
 			LEFT JOIN categories ON blog_categories.id_category = categories.id
-			LEFT JOIN blog_tags ON blogs.id = blog_tags.id_blog 
-			LEFT JOIN tags ON blog_tags.id_tag = tags.id  
 			GROUP BY blogs.id;
 	`
 
@@ -69,7 +57,6 @@ func GetBlogs(c *fiber.Ctx) error {
 				"message": err.Error(),
 			})
 		}
-		blog.TagName = SplitTags(tags)
 		blogs = append(blogs, blog)
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{
@@ -85,7 +72,20 @@ func GetDetailBlog(c *fiber.Ctx) error {
 
 	var blog blog.BlogResponse
 	var tag string
-	q := "SELECT blogs.id, users.username, categories.title AS kategori, GROUP_CONCAT(DISTINCT tags.name) AS tag, blogs.thumbnail, blogs.title, blogs.body, blogs.created_at, blogs.updated_at FROM blogs LEFT JOIN users ON blogs.user_id = users.id LEFT JOIN blog_categories ON blogs.id = blog_categories.id_blog LEFT JOIN categories ON blog_categories.id_category = categories.id LEFT join blog_tags ON blogs.id = blog_tags.id_tag LEFT JOIN tags ON blogs.id = tags.id WHERE blogs.id = ?"
+	q := `SELECT 
+			blogs.id, 
+			users.username,
+			categories.title AS kategori,
+			blogs.thumbnail,
+			blogs.title, 
+			blogs.body, 
+			blogs.created_at,
+			blogs.updated_at 
+		FROM blogs
+			LEFT JOIN users ON blogs.user_id = users.id 
+			LEFT JOIN blog_categories ON blogs.id = blog_categories.id_blog 
+			LEFT JOIN categories ON blog_categories.id_category = categories.id
+		WHERE blogs.id = ?`
 	err := db.QueryRow(q, id).Scan(&blog.Id, &blog.Username, &blog.Category, &tag, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt)
 
 	if err != nil {
@@ -99,8 +99,6 @@ func GetDetailBlog(c *fiber.Ctx) error {
 			"message": err.Error(),
 		})
 	}
-
-	blog.TagName = SplitTags(tag)
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"data": blog,
