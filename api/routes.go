@@ -9,6 +9,8 @@ func Routes(r *fiber.App) {
 	api := r.Group("api")
 	V1 := api.Group("v1")
 
+	// LOGIN USER
+	// REGISTER USER
 	// GET ALL BLOGS
 	V1.Get("/blogs", blog.GetBlogs)
 	// GET DETAIL BLOG
@@ -16,4 +18,7 @@ func Routes(r *fiber.App) {
 	// CREATE NEW BLOG
 	// V1.Post("/blogs", middleware.AuthMiddleware(), blog.HandleBlogWithDetails)
 	V1.Post("/blogs", blog.CreateBlog)
+
+	// CREATE NEW CATEGORY
+	V1.Post("/categories", blog.CreateNewCategory)
 }
