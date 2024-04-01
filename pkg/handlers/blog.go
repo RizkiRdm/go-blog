@@ -9,6 +9,7 @@ import (
 
 	"github.com/RizkiRdm/go-blog/db"
 	"github.com/RizkiRdm/go-blog/pkg/models/blog"
+	"github.com/RizkiRdm/go-blog/pkg/models/category"
 	"github.com/google/uuid"
 
 	"github.com/gofiber/fiber/v2"
@@ -51,8 +52,7 @@ func GetBlogs(c *fiber.Ctx) error {
 
 	for rows.Next() {
 		var blog blog.BlogResponse
-		var tags string
-		if err := rows.Scan(&blog.Id, &blog.Username, &blog.Category, &tags, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt); err != nil {
+		if err := rows.Scan(&blog.Id, &blog.Username, &blog.Category, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt); err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"message": err.Error(),
 			})
@@ -71,7 +71,6 @@ func GetDetailBlog(c *fiber.Ctx) error {
 	defer db.Close()
 
 	var blog blog.BlogResponse
-	var tag string
 	q := `SELECT 
 			blogs.id, 
 			users.username,
@@ -86,7 +85,7 @@ func GetDetailBlog(c *fiber.Ctx) error {
 			LEFT JOIN blog_categories ON blogs.id = blog_categories.id_blog 
 			LEFT JOIN categories ON blog_categories.id_category = categories.id
 		WHERE blogs.id = ?`
-	err := db.QueryRow(q, id).Scan(&blog.Id, &blog.Username, &blog.Category, &tag, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt)
+	err := db.QueryRow(q, id).Scan(&blog.Id, &blog.Username, &blog.Category, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt)
 
 	if err != nil {
 		// jika data kosong
@@ -102,6 +101,52 @@ func GetDetailBlog(c *fiber.Ctx) error {
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"data": blog,
+	})
+}
+
+// create new category - POST
+func CreateNewCategory(c *fiber.Ctx) error {
+	// handle body parser
+	request := new(category.RequestCreateCategory)
+	if err := c.BodyParser(request); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "cannot parse",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// define db variable
+	db := db.Connection()
+	defer db.Close()
+
+	// start transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"Message": err.Error(),
+		})
+	}
+	categoryQuery := "INSERT INTO `categories`(`title`) VALUES ('?')"
+	result, err := tx.Exec(categoryQuery, request.Name)
+
+	if result != nil {
+		tx.Rollback()
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed insert new category",
+			"messageErr": err.Error(),
+		})
+	}
+	// commit transaction
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed commit transaction",
+			"messageErr": err.Error(),
+		})
+	}
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"message": "success create new cateogory",
+		"data":    request,
 	})
 }
 
@@ -211,3 +256,5 @@ func CreateBlog(c *fiber.Ctx) error {
 		"data":    form.Value,
 	})
 }
+
+// update blog - PATCH
