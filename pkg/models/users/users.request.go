@@ -1,11 +1,11 @@
-package models
+package users
 
 // create request
 type UsersCreateRequest struct {
-	Name     string `json:"name"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
+	Name     string `json:"name" `
+	Username string `json:"username" `
+	Password string `json:"password" `
+	Email    string `json:"email" `
 }
 
 // update request
