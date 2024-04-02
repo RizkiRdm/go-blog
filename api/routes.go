@@ -1,7 +1,8 @@
 package api
 
 import (
-	blog "github.com/RizkiRdm/go-blog/pkg/handlers"
+	"github.com/RizkiRdm/go-blog/pkg/handlers/blog"
+	"github.com/RizkiRdm/go-blog/pkg/handlers/users"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -21,4 +22,7 @@ func Routes(r *fiber.App) {
 
 	// CREATE NEW CATEGORY
 	V1.Post("/categories", blog.CreateNewCategory)
+
+	// REGISTER USER
+	V1.Post("/register", users.RegisterUser)
 }
