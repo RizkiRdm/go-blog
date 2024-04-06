@@ -7,6 +7,7 @@ import (
 	"github.com/RizkiRdm/go-blog/pkg/models/users"
 	"github.com/RizkiRdm/go-blog/utils"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func RegisterUser(c *fiber.Ctx) error {
@@ -17,7 +18,8 @@ func RegisterUser(c *fiber.Ctx) error {
 			"messageErr": err.Error(),
 		})
 	}
-	// hash password
+
+	// Hash password
 	hashedPassword, err := utils.GenerateHashPassword(user.Password)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -25,52 +27,106 @@ func RegisterUser(c *fiber.Ctx) error {
 			"messageErr": err.Error(),
 		})
 	}
-	// define variable db
+
+	// Define database connection
 	db := db.Connection()
 	defer db.Close()
 
-	// define transaction
+	// Begin transaction
 	tx, err := db.Begin()
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
-	// check email are registered
+
+	// Check if email is already registered
 	var emailCount int
 	checkEmailQuery := "SELECT COUNT(*) FROM users WHERE email = ?"
 	if err := tx.QueryRow(checkEmailQuery, user.Email).Scan(&emailCount); err != nil {
+		tx.Rollback()
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": "failed check email",
-		})
-	}
-
-	if emailCount > 0 {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"message": "email already exist",
-		})
-	}
-
-	// save data user to database
-	insertUserQuery := "INSERT INTO `users`(`name`, `username`, `email`, `password`) VALUES ('?','?','?','?')"
-
-	if _, err := tx.Exec(insertUserQuery, user.Name, user.Username, user.Email, hashedPassword); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed insert data",
+			"message":    "failed to check email",
 			"messageErr": err.Error(),
 		})
 	}
 
-	// commit transaction
-	if err := tx.Commit(); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": "failed to commit transaction",
+	if emailCount > 0 {
+		tx.Rollback()
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"message": "email already exists",
 		})
 	}
 
-	// return success create data
+	// Insert user data into the database
+	insertUserQuery := "INSERT INTO `users` (`name`, `username`, `email`, `password`) VALUES (?, ?, ?, ?)"
+	if _, err := tx.Exec(insertUserQuery, user.Name, user.Username, user.Email, hashedPassword); err != nil {
+		tx.Rollback()
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed to insert data",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed to commit transaction",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// Return success message
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
 		"message": "success create data",
-		"data":    user,
+		"data": fiber.Map{
+			"name":     user.Name,
+			"username": user.Username,
+			"email":    user.Email,
+			"password": hashedPassword,
+		},
+	})
+}
+
+func LoginUser(c *fiber.Ctx) error {
+	user := new(users.UserLoginRequest)
+	if err := c.BodyParser(user); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "error parse body",
+			"messageErr": err.Error(),
+		})
+	}
+	// define db variable
+	db := db.Connection()
+	defer db.Close()
+
+	// get user by email
+	storedUser, err := users.GetUserByEmail(user.Email)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"message":    "invalid credentials email",
+			"messageErr": err.Error(),
+		})
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte(user.Password)); err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"message":    "invalid credentials password",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// generate token
+	token, err := utils.GenerateToken(storedUser.Email)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed generate token",
+			"messageErr": err.Error(),
+		})
+	}
+
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"token": token,
 	})
 }
