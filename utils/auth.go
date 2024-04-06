@@ -13,16 +13,23 @@ var jwtKey = []byte("secret")
 
 // hash password
 func GenerateHashPassword(password string) ([]byte, error) {
-	return bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	return hashedPassword, nil
 }
 
 // compare password
 func ComparePassword(password string, hash []byte) error {
-	return bcrypt.CompareHashAndPassword(hash, []byte(password))
+	// Bandingkan password mentah dengan hash password.
+	if err := bcrypt.CompareHashAndPassword(hash, []byte(password)); err != nil {
+		return err // Kembalikan error jika tidak cocok.
+	}
+	return nil // Password cocok, tidak ada error.
 }
 
 // generate jwt token for email
-
 func GenerateToken(email string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &users.Claims{
@@ -31,8 +38,12 @@ func GenerateToken(email string) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	return token.SignedString(jwtKey)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
 }
 
 // verify token
