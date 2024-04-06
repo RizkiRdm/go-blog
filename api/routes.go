@@ -11,7 +11,9 @@ func Routes(r *fiber.App) {
 	V1 := api.Group("v1")
 
 	// LOGIN USER
+	V1.Post("/login", users.LoginUser)
 	// REGISTER USER
+	V1.Post("/register", users.RegisterUser)
 	// GET ALL BLOGS
 	V1.Get("/blogs", blog.GetBlogs)
 	// GET DETAIL BLOG
