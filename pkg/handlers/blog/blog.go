@@ -123,35 +123,53 @@ func CreateNewCategory(c *fiber.Ctx) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"Message": err.Error(),
-		})
-	}
-	categoryQuery := "INSERT INTO `categories`(`title`) VALUES ('?')"
-	result, err := tx.Exec(categoryQuery, request.Name)
-
-	if result != nil {
-		tx.Rollback()
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed insert new category",
+			"message":    "failed to start transaction",
 			"messageErr": err.Error(),
 		})
 	}
+	defer tx.Rollback() // rollback transaction if function returns prematurely
+
+	// execute query to insert new category
+	categoryQuery := "INSERT INTO `categories`(`title`) VALUES (?)"
+	result, err := tx.Exec(categoryQuery, request.Title)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed to insert new category",
+			"messageErr": err.Error(),
+		})
+	}
+
 	// commit transaction
 	if err := tx.Commit(); err != nil {
-		tx.Rollback()
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed commit transaction",
+			"message":    "failed to commit transaction",
 			"messageErr": err.Error(),
 		})
 	}
+
+	// get last inserted ID
+	categoryID, err := result.LastInsertId()
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed to get last inserted ID",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// return success response
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"message": "success create new cateogory",
-		"data":    request,
+		"message": "success create new category",
+		"data": fiber.Map{
+			"id":    categoryID,
+			"title": request.Title,
+		},
 	})
 }
 
 // create new blog - POST
 func CreateBlog(c *fiber.Ctx) error {
+	// get token jwt
+	userEmail := c.Locals("user").(string)
 	// parse the multipart form
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -161,7 +179,7 @@ func CreateBlog(c *fiber.Ctx) error {
 	}
 
 	// convert user_id to int
-	userIdStr := form.Value["user_id"][0]
+	userIdStr := userEmail
 	userId, err := strconv.Atoi(userIdStr)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
@@ -226,16 +244,18 @@ func CreateBlog(c *fiber.Ctx) error {
 	}
 
 	// insert blogId to table blog_categories
-	categoryId, err := strconv.Atoi(form.Value["category_id"][0])
-	if err != nil {
+	categoryName := form.Value["category_name"][0]
+	readCategoryQuery := "SELECT id FROM categories WHERE title = ?"
+	var categoryID int
+	if err := tx.QueryRow(readCategoryQuery, categoryName).Scan(categoryID); err != nil {
 		tx.Rollback()
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"message":    "invalid category id",
-			"messageErr": err.Error(), // just for debugging
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed to get category ID",
+			"messageErr": err.Error(),
 		})
 	}
 	categoryQuery := "INSERT INTO blog_categories (id_blog, id_category) VALUES (?, ?) ON DUPLICATE KEY UPDATE id_blog = id_blog"
-	if _, err := tx.Exec(categoryQuery, blogId, categoryId); err != nil {
+	if _, err := tx.Exec(categoryQuery, blogId, categoryID); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message":    "failed to insert category",
 			"messageErr": err.Error(), // just for debugging
