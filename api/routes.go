@@ -25,8 +25,8 @@ func Routes(r *fiber.App) {
 	V1.Get("/blogs/:id", blog.GetDetailBlog)
 	// CREATE NEW BLOG
 	V1.Post("/blogs", blog.CreateBlog)
+	// UPDATE BLOG
+	V1.Patch("/blogs/:id", blog.UpdateBlog)
 	// CREATE NEW CATEGORY
 	V1.Post("/categories", blog.CreateNewCategory)
-	// REGISTER USER
-	V1.Post("/register", users.RegisterUser)
 }
