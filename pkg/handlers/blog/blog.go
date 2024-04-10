@@ -4,13 +4,12 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
 
 	"github.com/RizkiRdm/go-blog/db"
 	"github.com/RizkiRdm/go-blog/pkg/models/blog"
 	"github.com/RizkiRdm/go-blog/pkg/models/category"
-	"github.com/google/uuid"
+	"github.com/RizkiRdm/go-blog/utils"
+	"github.com/RizkiRdm/go-blog/utils/dbutil"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -168,8 +167,23 @@ func CreateNewCategory(c *fiber.Ctx) error {
 
 // create new blog - POST
 func CreateBlog(c *fiber.Ctx) error {
-	// get token jwt
-	userEmail := c.Locals("user").(string)
+	// read jwt token from cookie
+	cookies := c.Cookies("jwt")
+	if len(cookies) == 0 {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"message": "user not authenticated",
+		})
+	}
+
+	// extract user_id from token
+	userId, err := utils.ExtractUserId(cookies)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"message":    "invalid token for user_id",
+			"messageErr": err.Error(),
+		})
+	}
+
 	// parse the multipart form
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -178,99 +192,35 @@ func CreateBlog(c *fiber.Ctx) error {
 		})
 	}
 
-	// convert user_id to int
-	userIdStr := userEmail
-	userId, err := strconv.Atoi(userIdStr)
+	// handle upload image
+	thumbnailPath, err := dbutil.UploadImage(c, "thumbnail")
 	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"message": "invalid user id",
-		})
-	}
-
-	// handle image upload
-	file, err := c.FormFile("thumbnail")
-	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"message":    "thumbnail upload error",
-			"messageErr": err.Error(), // just for debugging
-		})
-	}
-
-	imageName := uuid.New().String() + filepath.Ext(file.Filename)
-	thumbnailPath := filepath.Join("./uploads", imageName)
-	if err := c.SaveFile(file, thumbnailPath); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed save image",
+			"message":    "failed to upload image",
 			"messageErr": err.Error(),
 		})
 	}
-
-	// define db variable
-	db := db.Connection()
-	defer db.Close()
 
 	// start transaction
+	db := db.Connection()
+	defer db.Close()
 	tx, err := db.Begin()
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": err.Error(),
-		})
+		return dbutil.HandleTransactionError(tx, c, err)
 	}
+	defer tx.Rollback()
 
 	// insert blog
-	blogQuery := "INSERT INTO blogs (user_id, title, thumbnail, body) VALUES (?, ?, ?, ?)"
-	result, err := tx.Exec(blogQuery, userId, form.Value["title"][0], thumbnailPath, form.Value["body"][0])
-	if err != nil {
-		tx.Rollback()
-
-		if err := os.Remove(thumbnailPath); err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"message":    "failed to rollback image",
-				"messageErr": err.Error(), // just debugging
-			})
-		}
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed insert blog",
-			"messageErr": err.Error(),
-		})
+	if err := dbutil.CreateBlog(tx, form, userId, thumbnailPath); err != nil {
+		return dbutil.HandleTransactionError(tx, c, err)
 	}
 
-	blogId, err := result.LastInsertId()
-	if err != nil {
-		tx.Rollback()
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": "failed to retrive blog_id",
-		})
-	}
-
-	// insert blogId to table blog_categories
-	categoryName := form.Value["category_name"][0]
-	readCategoryQuery := "SELECT id FROM categories WHERE title = ?"
-	var categoryID int
-	if err := tx.QueryRow(readCategoryQuery, categoryName).Scan(categoryID); err != nil {
-		tx.Rollback()
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed to get category ID",
-			"messageErr": err.Error(),
-		})
-	}
-	categoryQuery := "INSERT INTO blog_categories (id_blog, id_category) VALUES (?, ?) ON DUPLICATE KEY UPDATE id_blog = id_blog"
-	if _, err := tx.Exec(categoryQuery, blogId, categoryID); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed to insert category",
-			"messageErr": err.Error(), // just for debugging
-		})
-	}
-
-	// commit query
+	// commit transaction
 	if err := tx.Commit(); err != nil {
-		tx.Rollback()
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed commit transaction",
-			"messageErr": err.Error(),
-		})
+		return dbutil.HandleTransactionError(tx, c, err)
 	}
 
+	// return data
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
 		"message": "success",
 		"data":    form.Value,
@@ -278,3 +228,72 @@ func CreateBlog(c *fiber.Ctx) error {
 }
 
 // update blog - PATCH
+func UpdateBlog(c *fiber.Ctx) error {
+	// read jwt token from cookie
+	cookies := c.Cookies("jwt")
+	if len(cookies) == 0 {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"message": "user not authenticated",
+		})
+	}
+
+	// extract user_id from token
+	userId, err := utils.ExtractUserId(cookies)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+			"message":    "invalid token for user_id",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// parse the multipart form
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"message": "cannot parse form",
+		})
+	}
+
+	// handle image upload
+	thumbnailPath, err := dbutil.UploadImage(c, "thumbnail")
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "error save image",
+			"messageErr": err.Error(),
+		})
+	}
+
+	// start database transaction
+	db := db.Connection()
+	defer db.Close()
+	tx, err := db.Begin()
+	if err != nil {
+		return dbutil.HandleTransactionError(tx, c, err)
+	}
+	defer tx.Rollback()
+
+	// delete old thumbnail
+	id := c.Params("id")
+	oldThumbnail, err := dbutil.GetOldThumbnail(tx, id, userId)
+	if err != nil {
+		return dbutil.HandleTransactionError(tx, c, err)
+	}
+
+	if err := os.Remove(oldThumbnail); err != nil {
+		return dbutil.HandleTransactionError(tx, c, err)
+	}
+
+	// update blog
+	if err := dbutil.UpdateBlog(tx, form, id, userId, thumbnailPath); err != nil {
+		return dbutil.HandleTransactionError(tx, c, err)
+	}
+
+	// commit transaction
+	if err := tx.Commit(); err != nil {
+		return dbutil.HandleTransactionError(tx, c, err)
+	}
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"message": "success update",
+		"data":    form.Value,
+	})
+}
