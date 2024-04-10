@@ -2,6 +2,7 @@ package users
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/RizkiRdm/go-blog/db"
 	"github.com/RizkiRdm/go-blog/pkg/models/users"
@@ -10,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// register user - POST
 func RegisterUser(c *fiber.Ctx) error {
 	user := new(users.UsersCreateRequest)
 	if err := c.BodyParser(user); err != nil {
@@ -89,6 +91,7 @@ func RegisterUser(c *fiber.Ctx) error {
 	})
 }
 
+// login user - POST
 func LoginUser(c *fiber.Ctx) error {
 	user := new(users.UserLoginRequest)
 	if err := c.BodyParser(user); err != nil {
@@ -97,9 +100,6 @@ func LoginUser(c *fiber.Ctx) error {
 			"messageErr": err.Error(),
 		})
 	}
-	// define db variable
-	db := db.Connection()
-	defer db.Close()
 
 	// get user by email
 	storedUser, err := users.GetUserByEmail(user.Email)
@@ -118,7 +118,7 @@ func LoginUser(c *fiber.Ctx) error {
 	}
 
 	// generate token
-	token, err := utils.GenerateToken(storedUser.Email)
+	token, err := utils.GenerateToken(storedUser.Id)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"message":    "failed generate token",
@@ -126,7 +126,31 @@ func LoginUser(c *fiber.Ctx) error {
 		})
 	}
 
+	// create cookie
+	cookie := fiber.Cookie{
+		Name:     "jwt",
+		Value:    token,
+		Expires:  time.Now().Add(time.Hour * 24),
+		HTTPOnly: true,
+	}
+	c.Cookie(&cookie)
+
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"token": token,
+	})
+}
+
+// logout user - POST
+func LogoutUser(c *fiber.Ctx) error {
+	cookie := fiber.Cookie{
+		Name:     "jwt",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+	}
+	c.Cookie(&cookie)
+
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"message": "success logout",
 	})
 }
