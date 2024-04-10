@@ -1,9 +1,9 @@
 package category
 
 type RequestCreateCategory struct {
-	Name string `json:"category_name"`
+	Title string `json:"title"`
 }
 
 type RequestUpdateCategory struct {
-	Name string `json:"category_name"`
+	Title string `json:"title"`
 }
