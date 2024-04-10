@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/RizkiRdm/go-blog/pkg/models/users"
@@ -30,10 +31,10 @@ func ComparePassword(password string, hash []byte) error {
 }
 
 // generate jwt token for email
-func GenerateToken(email string) (string, error) {
+func GenerateToken(userId uint) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &users.Claims{
-		Email: email,
+		UsernameId: userId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
@@ -61,4 +62,24 @@ func VerifyTokenJWT(tokenString string) (*users.Claims, error) {
 		return nil, errors.New("invalid token")
 	}
 	return claims, nil
+}
+
+// extract user_id from jwt token
+func ExtractUserId(tokenString string) (int, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		return []byte("secret"), nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, fmt.Errorf("invalid token claims")
+	}
+	userId, ok := claims["user_id"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("user_id not found in token")
+	}
+	return int(userId), nil
 }
