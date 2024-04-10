@@ -30,6 +30,6 @@ func Midleware(c *fiber.Ctx) error {
 			"messageErr": err.Error(),
 		})
 	}
-	c.Locals("user", claims.Email)
+	c.Locals("user", claims.UsernameId)
 	return c.Next()
 }
