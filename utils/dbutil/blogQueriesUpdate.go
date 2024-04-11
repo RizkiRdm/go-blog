@@ -34,8 +34,19 @@ func UpdateBlog(tx *sql.Tx, form *multipart.Form, id string, userId int, thumbna
 func getCategoryId(tx *sql.Tx, categoryName string) (int, error) {
 	var categoryId int
 	readCategoryQuery := "SELECT id FROM `categories` WHERE title = ?"
-	if err := tx.QueryRow(readCategoryQuery, categoryName).Scan(categoryId); err != nil {
-		return 0, nil
+	if err := tx.QueryRow(readCategoryQuery, categoryName).Scan(&categoryId); err != nil {
+		if err == sql.ErrNoRows {
+			insertCategoryQuery := "INSERT INTO `categories` (title) VALUES (?)"
+			if _, err := tx.Exec(insertCategoryQuery, categoryName); err != nil {
+				return 0, err
+			}
+			// get category id
+			if err := tx.QueryRow(readCategoryQuery, categoryName).Scan(&categoryId); err != nil {
+				return 0, err
+			}
+			return categoryId, nil
+		}
+		return 0, err
 	}
 	return categoryId, nil
 }
