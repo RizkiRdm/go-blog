@@ -7,7 +7,6 @@ import (
 
 	"github.com/RizkiRdm/go-blog/db"
 	"github.com/RizkiRdm/go-blog/pkg/models/blog"
-	"github.com/RizkiRdm/go-blog/pkg/models/category"
 	"github.com/RizkiRdm/go-blog/utils"
 	"github.com/RizkiRdm/go-blog/utils/dbutil"
 
@@ -100,68 +99,6 @@ func GetDetailBlog(c *fiber.Ctx) error {
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"data": blog,
-	})
-}
-
-// create new category - POST
-func CreateNewCategory(c *fiber.Ctx) error {
-	// handle body parser
-	request := new(category.RequestCreateCategory)
-	if err := c.BodyParser(request); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "cannot parse",
-			"messageErr": err.Error(),
-		})
-	}
-
-	// define db variable
-	db := db.Connection()
-	defer db.Close()
-
-	// start transaction
-	tx, err := db.Begin()
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed to start transaction",
-			"messageErr": err.Error(),
-		})
-	}
-	defer tx.Rollback() // rollback transaction if function returns prematurely
-
-	// execute query to insert new category
-	categoryQuery := "INSERT INTO `categories`(`title`) VALUES (?)"
-	result, err := tx.Exec(categoryQuery, request.Title)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed to insert new category",
-			"messageErr": err.Error(),
-		})
-	}
-
-	// commit transaction
-	if err := tx.Commit(); err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed to commit transaction",
-			"messageErr": err.Error(),
-		})
-	}
-
-	// get last inserted ID
-	categoryID, err := result.LastInsertId()
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message":    "failed to get last inserted ID",
-			"messageErr": err.Error(),
-		})
-	}
-
-	// return success response
-	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"message": "success create new category",
-		"data": fiber.Map{
-			"id":    categoryID,
-			"title": request.Title,
-		},
 	})
 }
 
