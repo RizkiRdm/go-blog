@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/RizkiRdm/go-blog/pkg/handlers/blog"
+	"github.com/RizkiRdm/go-blog/pkg/handlers/category"
 	"github.com/RizkiRdm/go-blog/pkg/handlers/users"
 	"github.com/gofiber/fiber/v2"
 )
@@ -27,6 +28,6 @@ func Routes(r *fiber.App) {
 	V1.Post("/blogs", blog.CreateBlog)
 	// UPDATE BLOG
 	V1.Patch("/blogs/:id", blog.UpdateBlog)
-	// CREATE NEW CATEGORY
-	V1.Post("/categories", blog.CreateNewCategory)
+	// GET ALL CATEGORIES
+	V1.Get("/categories", category.GetCategories)
 }
