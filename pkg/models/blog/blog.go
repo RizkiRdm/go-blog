@@ -23,3 +23,8 @@ type BlogResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+type BlogSearchResponse struct {
+	Title string `json:"title_blog"`
+	Body  string `json:"body_blog"`
+}
