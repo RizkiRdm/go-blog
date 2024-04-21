@@ -7,8 +7,9 @@ import (
 
 // UPDATE BLOG FUNCTION
 func UpdateBlog(tx *sql.Tx, form *multipart.Form, id string, userId int, thumbnailPath string) error {
-	blogQuery := "UPDATE `blogs` SET `title`= ?, `thumbnail` = ?, `body` = ? WHERE `id` = ? AND `user_id` = ?"
-	result, err := tx.Exec(blogQuery, form.Value["title"][0], thumbnailPath, form.Value["body"][0], id, userId)
+	slug := SlugBlog(form.Value["title"][0])
+	blogQuery := "UPDATE `blogs` SET `title`= ?, `slug`= ? `thumbnail` = ?, `body` = ? WHERE `id` = ? AND `user_id` = ?"
+	result, err := tx.Exec(blogQuery, form.Value["title"][0], slug, thumbnailPath, form.Value["body"][0], id, userId)
 	if err != nil {
 		return err
 	}
