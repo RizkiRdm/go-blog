@@ -2,6 +2,7 @@ package blog
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -65,7 +66,7 @@ func GetBlogs(c *fiber.Ctx) error {
 // read details blogs - GET
 func GetDetailBlog(c *fiber.Ctx) error {
 	db := db.Connection()
-	id := c.Params("id")
+	slug := c.Params("slug")
 	defer db.Close()
 
 	var blog blog.BlogResponse
@@ -82,8 +83,8 @@ func GetDetailBlog(c *fiber.Ctx) error {
 			LEFT JOIN users ON blogs.user_id = users.id 
 			LEFT JOIN blog_categories ON blogs.id = blog_categories.id_blog 
 			LEFT JOIN categories ON blog_categories.id_category = categories.id
-		WHERE blogs.id = ?`
-	err := db.QueryRow(q, id).Scan(&blog.Id, &blog.Username, &blog.Category, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt)
+		WHERE blogs.slug = ?`
+	err := db.QueryRow(q, slug).Scan(&blog.Id, &blog.Username, &blog.Category, &blog.Title, &blog.Thumbnail, &blog.Body, &blog.CreatedAt, &blog.UpdatedAt)
 
 	if err != nil {
 		// jika data kosong
@@ -232,5 +233,65 @@ func UpdateBlog(c *fiber.Ctx) error {
 	return c.Status(http.StatusCreated).JSON(fiber.Map{
 		"message": "success update",
 		"data":    form.Value,
+	})
+}
+
+// SEARCH BLOG - GET
+func SearchBlog(c *fiber.Ctx) error {
+	searchQuery := c.Query("q")
+
+	// check query not empty
+	if len(searchQuery) == 0 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"message": "search query empty",
+		})
+	}
+
+	db := db.Connection()
+	defer db.Close()
+
+	search := "SELECT id, title, thumbnail, body FROM `blogs` WHERE `title` LIKE ? OR `body` LIKE ?"
+	rows, err := db.Query(search, "%"+searchQuery+"%", "%"+searchQuery+"%")
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"message":    "failed to search blog",
+			"messageErr": err.Error(),
+		})
+	}
+	defer rows.Close()
+
+	var searchResults []map[string]interface{}
+
+	for rows.Next() {
+		var (
+			id        int
+			title     string
+			thumbnail string
+			body      string
+		)
+		if err := rows.Scan(&id, &title, &thumbnail, &body); err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"message":    "failed to scan row",
+				"messageErr": err.Error(),
+			})
+		}
+
+		blog := map[string]interface{}{
+			"id":        id,
+			"title":     title,
+			"thumbnail": thumbnail,
+			"body":      body,
+		}
+		searchResults = append(searchResults, blog)
+	}
+
+	// if blog not found
+	if len(searchResults) == 0 {
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{
+			"message": fmt.Sprintf("no blog with query : '%s'", searchQuery),
+		})
+	}
+	return c.Status(http.StatusOK).JSON(fiber.Map{
+		"data": searchResults,
 	})
 }
